@@ -19,7 +19,6 @@ class UserController {
       name: Yup.string().required(),
       email: Yup.string().email().required(),
       password: Yup.string().min(6).required(),
-      admin: Yup.boolean().required(),
     });
 
     try {
@@ -28,7 +27,7 @@ class UserController {
         return res.status(400).json({error: err.errors});
     }
 
-    const { name, email, password, admin } = req.body;
+    const { name, email, password } = req.body;
 
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
@@ -43,7 +42,7 @@ class UserController {
       name,
       email,
       password_hash,
-      admin,
+      admin: false,
     });
 
     return res.status(201).json({

@@ -4,8 +4,8 @@
   "description": "API do DevBurger desenvolvida no módulo Backend Node.js Parte 1 da DevClub.",
   "main": "src/server.js",
   "scripts": {
-    "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
+    "dev": "node --env-file=.env --watch src/server.js",
+    "start": "node --env-file=.env src/server.js",
     "lint": "biome lint src",
     "check": "biome check src package.json biome.json"
   },
@@ -20,6 +20,7 @@
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
     "multer": "^2.5.0",
     "pg": "^8.23.1",
     "pg-hstore": "^2.3.4",
