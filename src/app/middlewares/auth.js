@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import authConfig from '../config/auth.js';
+import authConfig from '../../config/auth.js';
 
 const authMiddleware = (req, res, next) => {
   const authToken = req.headers.authorization;
@@ -10,9 +10,9 @@ const authMiddleware = (req, res, next) => {
     });
   }
 
-  const [scheme, token] = authToken.split(' ');
+  const [scheme, token, extra] = authToken.split(' ');
 
-  if (scheme !== 'Bearer' || !token) {
+  if (scheme !== 'Bearer' || !token || extra !== undefined) {
     return res.status(401).json({
       error: 'Invalid token format',
     });
@@ -28,14 +28,13 @@ const authMiddleware = (req, res, next) => {
     }
 
     req.userId = decoded.id;
-    req.userIsAdmin = decoded.admin; // Adiciona a propriedade userIsAdmin ao objeto req
+    req.userName = decoded.name;
+    req.userIsAdmin = decoded.admin === true; // Adiciona a propriedade userIsAdmin ao objeto req
 
     return next();
-} catch (error) {
-  console.log('JWT ERROR:', error.name, error.message);
-
-  return res.status(401).json({ error: 'Invalid token' });
-}
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
 };
 
 export default authMiddleware;

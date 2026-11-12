@@ -7,14 +7,14 @@ delete -> deletar um dado
 
 esses metodos nao podem ser duplicados, cada um tem sua funcao especifica
 */
-import User from '../models/User.js';
+
+import bcrypt from 'bcrypt';
 import { v4 } from 'uuid';
 import * as Yup from 'yup';
-import bcrypt from 'bcrypt';
+import User from '../models/User.js';
 
 class UserController {
   async store(req, res) {
-
     const schema = Yup.object({
       name: Yup.string().required(),
       email: Yup.string().email().required(),
@@ -22,9 +22,9 @@ class UserController {
     });
 
     try {
-     schema.validateSync(req.body, { abortEarly: false, strict: true });
-    }catch (err) {
-        return res.status(400).json({error: err.errors});
+      schema.validateSync(req.body ?? {}, { abortEarly: false, strict: true });
+    } catch (err) {
+      return res.status(400).json({ error: err.errors });
     }
 
     const { name, email, password } = req.body;
@@ -35,7 +35,6 @@ class UserController {
     }
 
     const password_hash = await bcrypt.hash(password, 10);
-
 
     const user = await User.create({
       id: v4(),

@@ -4,89 +4,96 @@
 
 **Um app de hamburgueria, começando pelo que ninguém vê.**
 
-Uma interface bonita é só parte do trabalho. Por trás do cardápio, existe um sistema cuidando de usuários, produtos, imagens e dados.
+Uma interface bonita é só parte do trabalho. Por trás do cardápio, existe um sistema cuidando de usuários, produtos, imagens e pedidos.
 
 É isso que estou construindo aqui.
 
-O DevBurger é um projeto Full Stack que estou desenvolvendo durante minha formação na DevClub. Este repositório reúne o back-end da aplicação, utilizando Node.js, Express e PostgreSQL.
+O DevBurger é um projeto Full Stack que estou desenvolvendo durante minha formação na DevClub. Este repositório reúne o backend da aplicação, utilizando Node.js, Express, PostgreSQL e MongoDB.
 
-**Progresso atual:** JWT, produtos, categorias, ofertas e permissões administrativas implementados. Projeto em desenvolvimento.
+**Progresso atual:** os dois módulos de backend do curso foram concluídos. O projeto Full Stack continua em desenvolvimento. A próxima etapa é o frontend com React.
 
 ## O que já funciona
 
-Envie `Authorization: Bearer <token>` para acessar as rotas de produtos e categorias. Usuários autenticados podem consultar o cardápio; apenas administradores podem cadastrar ou atualizar seus itens. O cadastro público ignora qualquer valor enviado em `admin`. Administradores existentes mantêm o acesso; não há rota pública para conceder privilégios administrativos.
+Usuários podem se cadastrar, fazer login, consultar produtos e categorias e criar pedidos. Envie `Authorization: Bearer <token>` para acessar as rotas protegidas. O cadastro público sempre cria um usuário comum, mesmo que seja enviado `admin: true`. Não há rota pública para conceder privilégios administrativos.
 
-As categorias agrupam os itens do cardápio, enquanto o campo `offer` identifica produtos marcados como ofertas. Ele não calcula descontos nem altera preços automaticamente. As atualizações de produtos e categorias mantêm a imagem atual quando nenhum novo arquivo é enviado e retornam uma mensagem de sucesso.
+Apenas administradores podem cadastrar ou atualizar produtos e categorias e alterar o status dos pedidos. Clientes consultam somente seus próprios pedidos; administradores consultam todos. Preços, nomes e categorias dos itens vêm do catálogo no servidor, e a identificação do cliente vem da autenticação. Pedidos vazios, IDs de produtos repetidos, produtos inexistentes e quantidades que não sejam inteiros positivos são rejeitados.
+
+As categorias agrupam os itens do cardápio. O campo `offer` marca um produto como oferta; ele não calcula descontos. Atualizações de produtos e categorias preservam a imagem atual quando nenhum arquivo novo é enviado e retornam uma mensagem de sucesso. Novos cadastros exigem imagem. Os uploads aceitam tipos declarados JPEG, PNG ou WebP de até 5 MB, com nomes gerados pelo servidor. A validação confere o MIME declarado, não o conteúdo do arquivo.
 
 ## Tecnologias
 
 | Área | Tecnologias |
 | --- | --- |
-| Back-end | Node.js 24+, Express 5 |
-| Banco de dados | PostgreSQL, Sequelize, Sequelize CLI |
+| Backend | Node.js 24+, Express 5 |
+| Usuários e catálogo | PostgreSQL, Sequelize, Sequelize CLI |
+| Pedidos | MongoDB, Mongoose |
 | Validação e segurança | Yup, bcrypt, JWT (jsonwebtoken) |
 | Upload de arquivos | Multer, UUID |
-| Ferramentas | Docker, pnpm, Biome |
+| Ferramentas | Docker para os bancos locais, pnpm, Biome |
 
 **Fluxo de uma requisição:**
 
-`Requisição → Rota → Controller → Model → PostgreSQL`
+`Requisição → Rota → Autenticação/autorização → Controller → Model → Banco`
+
+O PostgreSQL armazena usuários, produtos, categorias e os vínculos entre produtos e categorias. O MongoDB armazena cada pedido com uma cópia dos itens e preços no momento da compra, identificação do cliente, status e datas. Alterações posteriores no catálogo não reescrevem um pedido existente. Pagamentos não estão implementados.
 
 ## Estrutura
 
 ```text
 src/
-  app/controllers/   # Cadastro, sessão, produtos e categorias
-  app/models/        # Modelos User, Product e Category
+  app/controllers/   # Cadastro, sessões, catálogo e pedidos
+  app/middlewares/   # Autenticação JWT e autorização administrativa
+  app/models/        # Sequelize: User, Product e Category
+  app/schemas/       # Mongoose: Order
   config/            # Banco, uploads, arquivos estáticos (.cjs) e JWT
-  database/          # Conexão e migrations (.cjs)
-  middlewares/       # Autenticação JWT e autorização administrativa
-  app.js             # Configuração do Express
-  routes.js          # Rotas da API
+  database/          # Conexões e migrations do PostgreSQL (.cjs)
+  app.js             # Express, CORS e respostas de erro em JSON
+  routes.js          # Rotas públicas e protegidas da API
   server.js          # Inicialização na porta 3001
-tests/               # Testes pontuais de regressão dos controllers
+tests/               # Testes pontuais com o runner nativo do Node
 uploads/             # Imagens locais (conteúdo ignorado pelo Git)
 ```
 
-As rotas encaminham as requisições aos controllers, que validam os dados e usam os modelos do Sequelize para consultar e gravar no PostgreSQL. Os produtos pertencem a categorias, organizando o cardápio sem repetir o nome da categoria em cada produto.
+As rotas encaminham as requisições aos controllers, que validam os dados e usam Sequelize ou Mongoose para consultar e gravar nos bancos. A autenticação identifica o usuário; o middleware administrativo restringe alterações no catálogo e no status dos pedidos.
 
 ## Rotas da API
 
 | Método | Rota | Descrição |
 | --- | --- | --- |
-| POST | `/users` | Cadastro público com nome, e-mail e senha; hash com bcrypt; novos usuários sempre recebem `admin: false` |
-| POST | `/session` | Login com e-mail e senha; retorna dados básicos do usuário e JWT válido por um dia |
-| POST | `/products` | Apenas administradores: multipart/form-data com `name`, `price`, `category_id`, `offer` opcional e imagem no campo `file` |
-| PUT | `/products/:id` | Apenas administradores: atualiza os campos do produto; o envio de uma nova imagem é opcional |
-| GET | `/products` | Listagem autenticada dos produtos com URL da imagem, ID e nome da categoria |
-| POST | `/categories` | Apenas administradores: cria categoria com `name` e imagem em `file`; verifica nomes duplicados |
-| PUT | `/categories/:id` | Apenas administradores: atualiza nome e/ou imagem; verifica se a categoria existe e se o nome já pertence a outra categoria |
-| GET | `/categories` | Listagem autenticada das categorias com URLs das imagens |
-| GET | `/product-file/:arquivo` | Acesso público às imagens de `uploads/` |
-| GET | `/category-file/:arquivo` | Acesso público às imagens de `uploads/` |
+| POST | `/users` | Pública: `name`, `email`, `password` (mínimo de 6 caracteres); retorna `id`, `name`, `email`, `admin: false` |
+| POST | `/sessions` | Pública: login com e-mail/senha; retorna `message`, `id`, `name`, `email`, `admin` e JWT `token` válido por um dia |
+| POST | `/products` | Admin: multipart/form-data com `name`, `price` inteiro ≥ 0, `category_id` existente, booleano `offer` opcional e imagem em `file` |
+| PUT | `/products/:id` | Admin: atualização parcial desses campos; nova imagem opcional; 404 quando o produto não existe |
+| GET | `/products` | Autenticada: lista de produtos com URL da imagem e ID/nome da categoria |
+| POST | `/categories` | Admin: `name` (mínimo de 2 caracteres) e imagem em `file`; rejeita nomes duplicados |
+| PUT | `/categories/:id` | Admin: atualiza nome e/ou imagem; verifica existência e nomes duplicados |
+| GET | `/categories` | Autenticada: lista de categorias com URLs das imagens |
+| POST | `/orders` | Autenticada: cria pedido com `products: [{ id, quantity }]`; retorna o pedido salvo com `_id` |
+| GET | `/orders` | Autenticada: pedidos do próprio cliente ou todos os pedidos para administradores |
+| PUT | `/orders/:id` | Admin: JSON `{ "status": "preparing" }`; exige ID válido do MongoDB e pedido existente |
+| GET | `/product-file/:arquivo` | Pública: imagem enviada |
+| GET | `/category-file/:arquivo` | Pública: imagem enviada |
 
-As rotas foram testadas localmente utilizando Insomnia, com os registros do banco conferidos pelo Beekeeper Studio.
-
-Os testes pontuais cobrem os privilégios no cadastro público, o login de um administrador existente e as respostas das atualizações com e sem imagens. Eles substituem as operações de banco e não validam a integração real com PostgreSQL. Pedidos, pagamentos e MongoDB não estão implementados nesta etapa.
+Criações retornam 201, listagens/atualizações bem-sucedidas retornam 200, dados inválidos retornam 400, autenticação ausente/inválida retorna 401, acesso administrativo negado retorna 403 e alvos de atualização inexistentes retornam 404. Uploads acima do limite retornam 413. Falhas inesperadas retornam erro genérico em JSON, sem detalhes internos dos bancos. Erros de validação podem trazer um array em `error`; os demais trazem uma string em `error`. A resposta de e-mail duplicado usa `message`.
 
 ## Rodando o projeto
 
-Pré-requisitos: Node.js 24 ou superior, pnpm 12.18.0 e uma instância PostgreSQL acessível com banco e usuário já criados.
+Pré-requisitos: Node.js 24 ou superior, pnpm 12.18.0, PostgreSQL com banco/usuário já criados e MongoDB. Os bancos podem rodar no Docker; este repositório não inclui arquivo Compose. Mantenha os dois serviços ativos durante o uso da API.
 
 ```sh
 pnpm install --frozen-lockfile
 ```
 
-Copie `.env.example` para `.env` e preencha `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` e `DB_NAME` com os dados do seu PostgreSQL. Defina `JWT_SECRET` com um segredo próprio, longo e aleatório. Não publique o `.env`. Variáveis já definidas no ambiente têm prioridade. O carregamento usa o suporte nativo do Node.js na aplicação e no Sequelize CLI.
+Copie `.env.example` para `.env`. Preencha `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` e `DB_NAME`. Defina `JWT_SECRET` com um segredo próprio, longo e aleatório. Configure `MONGO_URL` (padrão: `mongodb://localhost:27017/devburger`) e `FRONTEND_URL` (padrão: `http://localhost:5173`). Variáveis já definidas no ambiente têm prioridade. O carregamento usa o suporte nativo do Node.js na aplicação e no Sequelize CLI. Nunca publique o `.env`.
 
-Para um banco novo, aplique as migrations após conferir o banco de destino:
+Para um banco PostgreSQL novo, confira o destino e aplique as migrations:
 
 ```sh
 pnpm exec sequelize-cli db:migrate:status
 pnpm exec sequelize-cli db:migrate
 ```
 
-Em um banco existente, confira o estado das migrations e faça backup dos dados antes de aplicar alterações. A migration que remove a antiga coluna `category` dos produtos descarta seus valores de texto; ela não os transfere para `category_id`. Revise os vínculos dos produtos existentes com as categorias separadamente. A aplicação usa ES Modules, enquanto os arquivos `.cjs` e o `.sequelizerc` usam CommonJS.
+Em um banco existente, confira o estado das migrations e faça backup antes de aplicar alterações. A migration que remove a antiga coluna `category` dos produtos descarta seus valores de texto; ela não os transfere para `category_id`. Revise os vínculos dos produtos existentes com as categorias separadamente. Os pedidos no MongoDB usam um schema Mongoose e não utilizam essas migrations SQL. A aplicação usa ES Modules; os arquivos `.cjs` e o `.sequelizerc` usam CommonJS.
 
 ```sh
 pnpm dev       # Desenvolvimento com reinicialização automática
@@ -96,20 +103,32 @@ pnpm check     # Análise, formatação e organização de imports
 node --test    # Testes pontuais sem conexão com banco
 ```
 
-A API atende em `http://localhost:3001`. Mantenha a pasta `uploads/` disponível e com permissão de escrita. As imagens enviadas ficam apenas no ambiente local; preserve-as junto com os dados do banco. As URLs de imagem desta etapa usam `localhost:3001`.
+A API atende em `http://localhost:3001`. Mantenha `uploads/` disponível e com permissão de escrita e preserve seu conteúdo junto com os backups dos bancos. O Git ignora imagens locais, dependências, arquivos de ambiente, logs e arquivos temporários. As URLs de imagem usam `localhost:3001` nesta etapa. O servidor permite CORS para a única origem definida em `FRONTEND_URL`, incluindo preflight e o header Authorization.
+
+## Testando a API
+
+1. Crie um usuário de teste com `POST /users` e faça login em `POST /sessions` com o mesmo e-mail e senha.
+2. Copie o `token` retornado para `Authorization: Bearer <token>`. Consulte `/categories` e `/products` para obter IDs existentes.
+3. Com uma conta administrativa existente, cadastre categorias e produtos usando multipart/form-data e o campo `file`. O cadastro público não cria administradores.
+4. Como cliente, envie o JSON abaixo para `POST /orders`, substituindo `1` por um ID real de produto. Consulte `/orders` e confira que aparecem apenas os pedidos desse cliente.
+5. Como administrador, liste os pedidos e atualize um deles com `PUT /orders/<_id>` e `{ "status": "preparing" }`. Tente alterar catálogo/status como cliente para conferir a resposta 403.
+
+```json
+{ "products": [{ "id": 1, "quantity": 2 }] }
+```
+
+Atualizações de produtos/categorias retornam `{ "message": "Product updated successfully" }` ou `{ "message": "Category updated successfully" }`. Atualizações de pedidos retornam `{ "message": "status updated" }`; consulte a listagem novamente para obter os dados atualizados. Os preços dos produtos são inteiros; o schema existente dos pedidos serializa o preço de cada item como string. O status aceita uma string não vazia, com `order made` como valor inicial. O frontend React deve considerar esses contratos.
+
+Para testar com segurança, use bancos de desenvolvimento separados e usuários fictícios. Os testes do checkpoint substituem as operações de banco e exercitam privilégios no cadastro, login administrativo, atualizações parciais, validação/privacidade de pedidos, proteção de rotas, CORS e erros JSON. A revisão final também conferiu conexões, estado das migrations e listagens GET nos bancos locais sem alterar seus dados. Escritas nos bancos reais e o fluxo completo de compra não foram testados nessa revisão. Não há script de build. `pnpm lint` passa; `pnpm check` ainda aponta problemas anteriores de formatação/imports em arquivos não alterados.
 
 ## Próximos passos
 
-Projeto em desenvolvimento para estudo local. Pendências para revisão ao final do módulo de backend:
+A próxima etapa do curso é o frontend com React: conectar login, cardápio e pedidos a esta API.
 
-- Validar arquivos ausentes e restringir tipos e tamanhos dos uploads.
-- Revisar a validação de ID/categoria dos produtos e a resposta ao atualizar um produto inexistente.
-- Revisar a normalização dos nomes de categorias e o tratamento de duplicidade em requisições simultâneas.
-- Revisar mudanças nas permissões administrativas enquanto um JWT permanece válido.
-- Adicionar cobertura de integração com banco e alinhar formatação e imports ao Biome (`pnpm check` atualmente aponta questões de estilo).
+Antes de ampliar o uso, revisar a revogação de privilégios enquanto um JWT de um dia continua válido, inspecionar o conteúdo real das imagens, limpar arquivos deixados por uploads rejeitados ou substituídos e adicionar cobertura de integração com os bancos. Alinhar os valores de status dos pedidos com o frontend. O tratamento de disponibilidade dos bancos na inicialização e URLs de imagem fora do ambiente local também ficam como melhorias futuras.
 
 ---
 
 Desenvolvido por [Bruno Santana](https://github.com/brunohsantana-dev).
 
-**Primeiro módulo concluído. Ainda tem muita coisa pela frente.**
+**Dois módulos de backend concluídos. O próximo passo é React.**
